@@ -1,0 +1,7 @@
+{
+  "name": "GHNukeAlert",
+  "author": "(G_H)",
+  "main": "ghplugins.GHNukeAlert",
+  "description": "Nuke Alert plugin for server.",
+  "version": 1.0
+}

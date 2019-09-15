@@ -1,7 +1,7 @@
 {
-  "name": "GHNukeAlert",
+  "name": "GHHelpChat",
   "author": "(G_H)",
-  "main": "ghnukealert.GHNukeAlert",
-  "description": "Simple Nuke Alert plugin for server.",
+  "main": "ghplugins.GHHelpChat",
+  "description": "Help Chat plugin for server.",
   "version": 1.0
 }
