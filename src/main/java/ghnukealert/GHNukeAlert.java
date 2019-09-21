@@ -32,12 +32,18 @@ public class GHNukeAlert extends Plugin{
     *
     */
 
+    //TODO:
+    // To Fix: Multiple Messages Sent to Player Cannot be Processed At Once? (Only the Last Message Sent to the Player was Processed.
+    // To Fix: Player Related Registries are currently Based on the Player Object itself, which If the Player were to Reconnect, he Would be Using Another Player Object,
+    //         which Would Create a new Registry.
+
     private static String LN = System.getProperty("line.separator");
     private static FileHandle ghnaDirectory;
     private ObjectMap<Tile, Player> prebuiltNukes = new ObjectMap<>();
     private Array<BuiltNuke> builtNukes = new Array<>();
     private Array<DestroyedNuke> destroyedNukes = new Array<>();
     private ObjectMap<Player, NukesBuilt> nukeBuilders = new ObjectMap<>();
+
     private long startTime, endTime, minInterval = 1000, maxInterval = 60000;
     private long[] lastAlert = new long[2];
     private float coreProtectionRange = 12 * tilesize;
@@ -48,6 +54,7 @@ public class GHNukeAlert extends Plugin{
             "bn - List the Nukes that was once Built on the map (could be a long list)" + LN +
             "dn - List the Nukes that was Destoryed (could be a long list)" + LN +
             "rtrs - List all the thorium reactors and their distance to the nearest ally core on the map" + LN +
+            "pj - List all players joined this game" + LN +
 
             "mode - Display current mode" + LN +
             "al - Display current nuke announce level" + LN +
@@ -62,6 +69,7 @@ public class GHNukeAlert extends Plugin{
             "bn - List the Nukes that was once Built on the map (could be a long list)" + LN +
             "dn - List the Nukes that was Destoryed (could be a long list)" + LN +
             "rtrs - List all the thorium reactors and their distance to the nearest ally core on the map" + LN +
+            "pj - List all players joined this game" + LN +
 
             "mode - Display current mode" + LN +
             "mode <true|false> - Change mode to" + LN +
@@ -79,8 +87,6 @@ public class GHNukeAlert extends Plugin{
         Events.on(BuildSelectEvent.class, this::buildSelectEvent);
         Events.on(BlockBuildEndEvent.class, this::blockBuildEndEvent);
         Events.on(BlockDestroyEvent.class, this::blockDestroyEvent);
-        //Events.on(PlayerJoin.class, this::playerJoin());
-        //Events.on(PlayerLeave.class, this::playerLeave());
         ghnaDirectory = dataDirectory.child("ghplugins/");
         ghnaDirectory = ghnaDirectory.child("ghna/");
         ghnaDirectory.mkdirs();
@@ -192,7 +198,7 @@ public class GHNukeAlert extends Plugin{
                         break;
 
                     default:
-                        print("You need some [yellow]help[white]?", player);
+                        print("You need some [yellow]help[]? Do '/ghna help'", player);
                         break;
                 }
         });
@@ -202,6 +208,8 @@ public class GHNukeAlert extends Plugin{
         prebuiltNukes.clear();
         builtNukes.clear();
         destroyedNukes.clear();
+        nukeBuilders.clear();
+
         startTime = time();
     }
 
@@ -233,6 +241,8 @@ public class GHNukeAlert extends Plugin{
         Timer.schedule(()-> alert(tile, block, builder, building), 0.1f);
     }
 
+
+//Event Listeners
     private void worldLoadEvent(){
         if(nukealert() && nukelogging()) saveNukeInfos();
         reset();
@@ -241,7 +251,7 @@ public class GHNukeAlert extends Plugin{
         if(!nukealert()) return;
         if(!(e.builder != null && e.builder.buildRequest() != null && e.builder instanceof Player && e.builder.buildRequest().block == Blocks.thoriumReactor)) return;
         Player player = (Player)e.builder;
-        if(!e.breaking) {
+        if(!e.breaking){
             prebuiltNukes.put(e.tile, player);
             if(dstToClosestCore(e.tile) <= coreProtectionRange)
                 alert(e.tile, e.tile.block(), player, true);
@@ -249,7 +259,7 @@ public class GHNukeAlert extends Plugin{
     }
     private void blockBuildEndEvent(BlockBuildEndEvent e){
         if(!nukealert()) return;
-        if(e.tile.block() == Blocks.thoriumReactor && !e.breaking) {
+        if(e.tile.block() == Blocks.thoriumReactor && !e.breaking){
             for (Tile prebuiltNuke : prebuiltNukes.keys()) {
                 Player builder = null;
                 if (prebuiltNuke == e.tile)
@@ -260,7 +270,7 @@ public class GHNukeAlert extends Plugin{
                     nukeBuilders.put(builder, new NukesBuilt());
                 nukeBuilders.get(builder).add(dstToClosestCore(e.tile) <= coreProtectionRange);
                 if(dstToClosestCore(e.tile) <= coreProtectionRange)
-                    alert(e.tile, e.tile.block(), builder,false);
+                    alert(e.tile, e.tile.block(), builder, false);
             }
         }else if(e.tile.block() == Blocks.air && e.breaking){
             for(BuiltNuke nuke : builtNukes)
@@ -291,14 +301,9 @@ public class GHNukeAlert extends Plugin{
             prebuiltNukes.remove(e.tile);
         }
     }
-    /*private void playerJoin(PlayerJoin e){
-        if(e.player.isAdmin)
-            adminChat.add(e.player);
-    }
-    private void playerLeave(PlayerJoin e){
-        adminChat.remove(e.player);
-    }*/
+//  Event Listeners
 
+//To String
     private Array<String> builtNukesToStringArr(boolean server){
         Array<String> result = new Array<>();
         StringBuilder sb = new StringBuilder();
@@ -359,6 +364,23 @@ public class GHNukeAlert extends Plugin{
         }
         return result;
     }
+    private String strArrToStr(Array<String> arr) {
+        arr.iterator();
+        StringBuilder msg = new StringBuilder();
+        for(int i = 0; arr.iterator().hasNext(); i++){
+            if (msg.length() + arr.get(i).length() >= 1024 || i > 8 && msg.length() != 0){
+                if(player != null) print(msg.toString(), player);
+                else info(msg.toString());
+                msg.delete(0, msg.length()-1);
+                i = 0;
+            }
+            msg.append(LN).append(arr.iterator().next());
+            if(arr.iterator().hasNext()) msg.append(", ");
+        }
+        return msg.append(LN).append("Total: ").append(arr.size).toString();
+    }
+//  To String
+
     private Tile closestCore(Tile tile){
         if(state.teams.get(tile.getTeam()).cores.size <= 0) return null;
         return Geometry.findClosest(tile.x, tile.y, state.teams.get(tile.getTeam()).cores);
@@ -389,7 +411,7 @@ public class GHNukeAlert extends Plugin{
             br.write("Destroyed Nukes: {" + LN + LN);
             br.write(destroyedNukesToStringArr(true).toString(LN) + " }" + LN + LN + LN);
             br.write("Player Who Built Nuke: {" + LN + LN);
-            br.write(nukeBuildersToStringArr().toString(LN) + " }");
+            br.write(nukeBuildersToStringArr().toString(LN) + " }" + LN + LN + LN);
 
             Log.info("[GHNA]: New Log is Created [" + file.getAbsolutePath() + "]");
         }catch (IOException e){
@@ -418,75 +440,30 @@ public class GHNukeAlert extends Plugin{
             sb.append(fill);
         return sb.append(i).toString();
     }
-
     private String smootherTilePosLog(short x, short y){
         return "[" + smootherIntLog(x, world.width()) + ", " + smootherIntLog(y, world.height()) + "]";
-    }
-
-    private void printToEveryone(String str, String textcolor){
-        int alertLevel = nukealertlevel();
-        for(Player player : playerGroup.all())
-            if(alertLevel == 2 || (alertLevel == 1 && player.isAdmin))
-            player.sendMessage(textcolor + str);
-
-        //Let's not do this, Logging Alerts into Console is Pretty Spammy.
-        //Log.info(str);
-    }
-    private void print(String str, Player player){
-        player.sendMessage(str);
-    }
-    private void print(Array<String> arr, Player player){
-        StringBuilder msg = new StringBuilder();
-        for(int i = 0, j = 0; i < arr.size; i++, j++) {
-            if (msg.length() + arr.get(i).length() >= 1024 || j > 8) {
-                if(player != null) print(msg.toString(), player);
-                else info(msg.toString());
-                msg.delete(0, msg.length()-1);
-                j = 0;
-            }
-            msg.append(LN).append(arr.get(i));
-            if(i + 1 < arr.size)
-                msg.append(", ");
-        }
-        if(player != null) print(msg.toString() + LN + "Total: " + arr.size, player);
-        else info(msg.toString() + LN + "Total: " + arr.size);
     }
 
     private void info(String str){
         Log.info(str);
     }
     private void info(Array<String> arr){
-        print(arr, null);
+        info(strArrToStr(arr));
     }
-
-    private long time(){
-        return System.currentTimeMillis();
+    private void print(String str, Player player){
+        player.sendMessage(str);
     }
-
-    private String msToDate(long ms) {
-        return msToString(ms, true, false, false, ":", " | ", ".");
+    private void print(Array<String> arr, Player player){
+        print(strArrToStr(arr), player);
     }
+    private void printToEveryone(String str, String textcolor){
+        int alertLevel = nukealertlevel();
+        for(Player player : playerGroup.all())
+            if(alertLevel == 2 || (alertLevel == 1 && player.isAdmin))
+                print(textcolor + str, player);
 
-    private String msToFileName(long ms){
-        return msToString(ms, false, true, true, "-", "-", "-");
-    }
-
-    private String msToString(long ms, boolean outer, boolean date, boolean timezone, String sep1, String sep2, String sep3){
-        Calendar cal = new GregorianCalendar();
-        cal.setTimeInMillis(ms);
-        String yr = String.valueOf(cal.get(Calendar.YEAR));
-        String mon = smootherIntLog(cal.get(Calendar.MONTH), 10, "0");
-        String day = smootherIntLog(cal.get(Calendar.DATE), 10, "0");
-        String hr = smootherIntLog(cal.get(Calendar.HOUR), 10, "0");
-        String min = smootherIntLog(cal.get(Calendar.MINUTE), 10, "0");
-        String sec = smootherIntLog(cal.get(Calendar.SECOND), 10, "0");
-        String millis = smootherIntLog(cal.get(Calendar.MILLISECOND), 100, "0");
-
-        return (outer ? "[" : "") + (date ? mon + sep1 + day + sep1 + yr + sep2 : "") + hr + sep1 + min + sep1 + sec + sep3 + millis + (timezone ? "(" + cal.getTimeZone().getDisplayName(false, TimeZone.SHORT) + ")" : "") + (outer ? "]" : "");
-    }
-
-    private String getTimeZone(){
-        return new GregorianCalendar().getTimeZone().getDisplayName(false, TimeZone.SHORT);
+        //Let's not do this, Logging Alerts into Console is Pretty Spammy.
+        //Log.info(str);
     }
 
     private boolean nukealert(){
@@ -527,6 +504,43 @@ public class GHNukeAlert extends Plugin{
     }
 //  Utils
 
+//Time
+    private long time(){
+        return System.currentTimeMillis();
+    }
+    private String getTimeZone(){
+        return new GregorianCalendar().getTimeZone().getDisplayName(false, TimeZone.SHORT);
+    }
+    private String periodToTimeStr(long period){
+        int ms = (int)period % 1000,
+        sec = (int)(period / 1000 % 60),
+        min = (int)(period / (1000 * 60) % 60),
+        hr = (int)(period / (1000 * 60 * 60) % 24),
+        days = (int)(period / (1000 * 60 * 60 * 24));
+        return "[" + (days == 0 ? "" : days + ":") + smootherIntLog(hr, 23, "0") + ":" + smootherIntLog(min, 59, "0") + ":" + smootherIntLog(sec, 59, "0")  + "." + smootherIntLog(ms, 999, "0") + "]";
+    }
+    private String msToDate(long ms) {
+        return msToString(ms, true, false, false, ":", " | ", ".");
+    }
+    private String msToFileName(long ms){
+        return msToString(ms, false, true, true, "-", "-", "-");
+    }
+    private String msToString(long ms, boolean outer, boolean date, boolean timezone, String sep1, String sep2, String sep3){
+        Calendar cal = new GregorianCalendar();
+        cal.setTimeInMillis(ms);
+        String yr = String.valueOf(cal.get(Calendar.YEAR));
+        String mon = smootherIntLog(cal.get(Calendar.MONTH), 10, "0");
+        String day = smootherIntLog(cal.get(Calendar.DATE), 10, "0");
+        String hr = smootherIntLog(cal.get(Calendar.HOUR), 10, "0");
+        String min = smootherIntLog(cal.get(Calendar.MINUTE), 10, "0");
+        String sec = smootherIntLog(cal.get(Calendar.SECOND), 10, "0");
+        String millis = smootherIntLog(cal.get(Calendar.MILLISECOND), 100, "0");
+
+        return (outer ? "[" : "") + (date ? mon + sep1 + day + sep1 + yr + sep2 : "") + hr + sep1 + min + sep1 + sec + sep3 + millis + (timezone ? "(" + cal.getTimeZone().getDisplayName(false, TimeZone.SHORT) + ")" : "") + (outer ? "]" : "");
+    }
+//  Time
+
+//Classes
     private class BuiltNuke{
         Long time;
         short x, y;
@@ -539,6 +553,7 @@ public class GHNukeAlert extends Plugin{
             this.builder = builder;
         }
     }
+
     private class DestroyedNuke{
         Long time;
         short x, y;
@@ -551,6 +566,7 @@ public class GHNukeAlert extends Plugin{
             this.cwd = cwd;
         }
     }
+
     private class ConditionWhenDestroyed{
         float healthf;
         float heat;
@@ -573,7 +589,7 @@ public class GHNukeAlert extends Plugin{
             result += overheat() ? (colorized ? "[RED]" : "") + "E[]" : " ";
             result += deconstructed() || hasItem() || overheat() ? "]" : " ";
 
-            result += "Healthf: " + smootherFloatLog(healthf, 5) + ", Heat: " + smootherFloatLog(heat, 5) + ", Items: " + smootherIntLog(items, 2);
+            result += "Healthf: " + smootherFloatLog(healthf, 10000) + ", Heat: " + smootherFloatLog(heat, 10000) + ", Items: " + smootherIntLog(items, 30);
             return result;
         }
 
@@ -587,6 +603,7 @@ public class GHNukeAlert extends Plugin{
             return heat >= 0.999f;
         }
     }
+
     private class NukesBuilt{
         private int nukes, lethalNukes;
 
@@ -604,6 +621,76 @@ public class GHNukeAlert extends Plugin{
             return "Nuke: [" + nukes + ", " + lethalNukes + "], ID: [" + player.id + "], Player: [ " + player.name + " ], UUID: [" + player.uuid + "], IP: [" + player.con.address + "]";
         }
     }
+//  Classes
+
+//Future & Unrelated Stuffs
+
+
+    /* Player Record (Time)
+    private LinkedHashMap<Player, PlayerRecord> playersJoined = new LinkedHashMap<>();
+
+    Events.on(PlayerJoin.class, this::playerJoin);
+    Events.on(PlayerLeave.class, this::playerLeave);
+
+    private void playerJoin(PlayerJoin e){
+        if(!playersJoined.containsKey(e.player))
+            playersJoined.put(e.player, new PlayerRecord());
+        playersJoined.get(e.player).add(true);
+    }
+
+    private void playerLeave(PlayerLeave e){
+        if(!playersJoined.containsKey(e.player))
+            playersJoined.put(e.player, new PlayerRecord());
+        playersJoined.get(e.player).add(false);
+    }
+
+    private Array<String> playersJoinedToStringArr(int mode){
+        //mode: 0 = client, 1 = server, 2 = file logs
+        Array<String> result = new Array<>();
+        playersJoined.forEach((p, r) -> result.add("[" + (mode < 2 ? r.toSimpleString(p, mode == 1) : r.toFullString(p)) + "]"));
+        return result;
+    }
+
+    private class PlayerRecord{
+        Array<Long> joinTimes, leaveTimes;
+
+        private PlayerRecord(){
+            joinTimes = new Array<>();
+            leaveTimes = new Array<>();
+            joinTimes.add(startTime);
+        }
+        private void add(boolean join){
+            if(join) joinTimes.insert(0, time());
+            else leaveTimes.insert(0, time());
+        }
+        private String toSimpleString(Player player, boolean server){
+            long lastJoin = joinTimes.get(0);
+            long lastLeave = leaveTimes.size == 0 ? time() : leaveTimes.get(0);
+            return "[<" + (server ? player.name : GHUtil.colorizeName(player)) + "[white]>" +
+                    "\nLast Join: " + msToDate(lastJoin) +
+                    "\nLast Leave: " + msToDate(lastLeave) +
+                    "\nTotal Play Time: " + periodToTimeStr(totalPlayTime()) + "]";
+        }
+        private String toFullString(Player player){
+            Array<String> joinTimesStr = new Array<>(), leaveTimesStr = new Array<>();
+            joinTimes.forEach(t -> joinTimesStr.add(msToDate(t)));
+            leaveTimes.forEach(t -> leaveTimesStr.add(msToDate(t)));
+            return "[<" + player.name + ">" +
+                    "\nJoin Times: " + joinTimes.toString(", ") +
+                    "\nLeave Times: " + leaveTimes.toString(", ") +
+                    "\nTotal Play Time: " + periodToTimeStr(totalPlayTime()) + "]";
+        }
+        private long totalPlayTime() {
+            long totalPlayTime = 0;
+            for(int i = 0; i < joinTimes.size; i++)
+                if(i < leaveTimes.size) totalPlayTime += leaveTimes.get(i) - joinTimes.get(i);
+                else totalPlayTime += time() - joinTimes.get(i);
+            return totalPlayTime;
+        }
+    }
+    Player Record (Time) */
+
+//  Future & Unrelated Stuffs
 
 //Vote
 
